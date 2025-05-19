@@ -13,9 +13,9 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 \
     go build -trimpath \
     -ldflags "-s -w \
-    -X github.com/krau/SaveAny-Bot/common.Version=${VERSION} \
-    -X github.com/krau/SaveAny-Bot/common.GitCommit=${GitCommit} \
-    -X github.com/krau/SaveAny-Bot/common.BuildTime=${BuildTime}" \
+    -X github.com/krau/Cosr-Backup/common.Version=${VERSION} \
+    -X github.com/krau/Cosr-Backup/common.GitCommit=${GitCommit} \
+    -X github.com/krau/Cosr-Backup/common.BuildTime=${BuildTime}" \
     -o saveany-bot .
 
 FROM alpine:latest
