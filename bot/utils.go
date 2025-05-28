@@ -49,9 +49,9 @@ func getSelectStorageMarkup(userChatID int64, fileChatID, fileMessageID int) (*t
 		return nil, fmt.Errorf("failed to get user by chat ID: %d, error: %w", userChatID, err)
 	}
 	storages := storage.GetUserStorages(user.ChatID)
-	if len(storages) == 0 {
-		return nil, ErrNoStorages
-	}
+	// if len(storages) == 0 {
+	// 	return nil, ErrNoStorages
+	// }
 
 	buttons := make([]tg.KeyboardButtonClass, 0)
 	for _, storage := range storages {
@@ -71,6 +71,14 @@ func getSelectStorageMarkup(userChatID int64, fileChatID, fileMessageID int) (*t
 		row.Buttons = buttons[i:min(i+3, len(buttons))]
 		markup.Rows = append(markup.Rows, row)
 	}
+	markup.Rows = append(markup.Rows, tg.KeyboardButtonRow{
+		Buttons: []tg.KeyboardButtonClass{
+			&tg.KeyboardButtonCallback{
+				Text: "发送到当前聊天",
+				Data: []byte(fmt.Sprintf("send_here %d %d", fileChatID, fileMessageID)),
+			},
+		},
+	})
 	return markup, nil
 }
 
@@ -208,7 +216,7 @@ func GetTGMessage(ctx *ext.Context, chatId int64, messageID int) (*tg.Message, e
 	if err == nil {
 		return cacheMessage, nil
 	}
-	common.Log.Debugf("Fetching message: %d", messageID)
+	common.Log.Debugf("Fetching message: %d:%d", chatId, messageID)
 	messages, err := ctx.GetMessages(chatId, []tg.InputMessageClass{&tg.InputMessageID{ID: messageID}})
 	if err != nil {
 		return nil, err

@@ -9,6 +9,7 @@ import (
 	"github.com/gotd/contrib/middleware/floodwait"
 	"github.com/gotd/contrib/middleware/ratelimit"
 	"github.com/gotd/td/telegram"
+	"github.com/krau/SaveAny-Bot/common"
 	"github.com/krau/SaveAny-Bot/config"
 	"golang.org/x/time/rate"
 )
@@ -30,8 +31,40 @@ const noPermissionText string = `
 func checkPermission(ctx *ext.Context, update *ext.Update) error {
 	userID := update.GetUserChat().GetID()
 	if !slice.Contain(config.Cfg.GetUsersID(), userID) {
+		if config.Cfg.AsPublicCopyMediaBot {
+			tryCopyMedia(ctx, update)
+			return dispatcher.EndGroups
+		}
 		ctx.Reply(update, ext.ReplyTextString(noPermissionText), nil)
 		return dispatcher.EndGroups
 	}
 	return dispatcher.ContinueGroups
+}
+
+func tryCopyMedia(ctx *ext.Context, update *ext.Update) {
+	if !config.Cfg.AsPublicCopyMediaBot {
+		return
+	}
+	if update.EffectiveMessage == nil || update.EffectiveMessage.Message == nil {
+		return
+	}
+	common.Log.Tracef("Got copy media request from %d", update.EffectiveChat().GetID())
+	msg := update.EffectiveMessage.Message
+	if link := linkRegex.FindString(update.EffectiveMessage.Text); link != "" {
+		linkChatID, messageID, err := parseLink(ctx, link)
+		if err != nil {
+			return
+		}
+		fileMessage, err := GetTGMessage(ctx, linkChatID, messageID)
+		if err != nil {
+			return
+		}
+		if fileMessage == nil || fileMessage.Media == nil {
+			return
+		}
+		msg = fileMessage
+	}
+	if _, err := copyMediaToChat(ctx, msg, update.EffectiveChat().GetID()); err != nil {
+		common.Log.Errorf("Failed to copy media: %v", err)
+	}
 }
