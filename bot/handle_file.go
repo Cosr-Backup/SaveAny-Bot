@@ -8,7 +8,6 @@ import (
 	"github.com/gotd/td/tg"
 	"github.com/krau/SaveAny-Bot/common"
 	"github.com/krau/SaveAny-Bot/dao"
-	"github.com/krau/SaveAny-Bot/storage"
 	"github.com/krau/SaveAny-Bot/types"
 )
 
@@ -28,11 +27,11 @@ func handleFileMessage(ctx *ext.Context, update *ext.Update) error {
 		ctx.Reply(update, ext.ReplyTextString("获取用户失败"), nil)
 		return dispatcher.EndGroups
 	}
-	storages := storage.GetUserStorages(user.ChatID)
-	if len(storages) == 0 {
-		ctx.Reply(update, ext.ReplyTextString("无可用的存储"), nil)
-		return dispatcher.EndGroups
-	}
+	// storages := storage.GetUserStorages(user.ChatID)
+	// if len(storages) == 0 {
+	// 	ctx.Reply(update, ext.ReplyTextString("无可用的存储"), nil)
+	// 	return dispatcher.EndGroups
+	// }
 
 	msg, err := ctx.Reply(update, ext.ReplyTextString("正在获取文件信息..."), nil)
 	if err != nil {
@@ -50,14 +49,15 @@ func handleFileMessage(ctx *ext.Context, update *ext.Update) error {
 		file.FileName = GenFileNameFromMessage(*update.EffectiveMessage.Message, file)
 	}
 
-	if err := dao.SaveReceivedFile(&dao.ReceivedFile{
+	record, err := dao.SaveReceivedFile(&dao.ReceivedFile{
 		Processing:     false,
 		FileName:       file.FileName,
 		ChatID:         update.EffectiveChat().GetID(),
 		MessageID:      update.EffectiveMessage.ID,
 		ReplyMessageID: msg.ID,
 		ReplyChatID:    update.GetUserChat().GetID(),
-	}); err != nil {
+	})
+	if err != nil {
 		common.Log.Errorf("添加接收的文件失败: %s", err)
 		if _, err := ctx.EditMessage(update.EffectiveChat().GetID(), &tg.MessagesEditMessageRequest{
 			Message: fmt.Sprintf("添加接收的文件失败: %s", err),
@@ -74,6 +74,7 @@ func handleFileMessage(ctx *ext.Context, update *ext.Update) error {
 	return HandleSilentAddTask(ctx, update, user, &types.Task{
 		Ctx:            ctx,
 		Status:         types.Pending,
+		FileDBID:       record.ID,
 		File:           file,
 		StorageName:    user.DefaultStorage,
 		FileChatID:     update.EffectiveChat().GetID(),
