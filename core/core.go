@@ -3,91 +3,83 @@ package core
 import (
 	"context"
 	"errors"
-	"fmt"
 
-	"github.com/celestix/gotgproto/ext"
-	"github.com/gotd/td/telegram/downloader"
-	"github.com/gotd/td/tg"
-	"github.com/krau/SaveAny-Bot/common"
+	"github.com/charmbracelet/log"
 	"github.com/krau/SaveAny-Bot/config"
-	"github.com/krau/SaveAny-Bot/queue"
-	"github.com/krau/SaveAny-Bot/types"
+	"github.com/krau/SaveAny-Bot/pkg/enums/tasktype"
+	"github.com/krau/SaveAny-Bot/pkg/queue"
 )
 
-var Downloader *downloader.Downloader
+var queueInstance *queue.TaskQueue[Exectable]
 
-func init() {
-	Downloader = downloader.NewDownloader().WithPartSize(1024 * 1024)
+type Exectable interface {
+	Type() tasktype.TaskType
+	TaskID() string
+	Execute(ctx context.Context) error
 }
 
-func worker(queue *queue.TaskQueue, semaphore chan struct{}) {
+func worker(ctx context.Context, qe *queue.TaskQueue[Exectable], semaphore chan struct{}) {
+	logger := log.FromContext(ctx)
+	execHooks := config.Cfg.Hook.Exec
 	for {
 		semaphore <- struct{}{}
-		task := queue.GetTask()
-		common.Log.Debugf("Got task: %s", task.String())
-
-		switch task.Status {
-		case types.Pending:
-			common.Log.Infof("Processing task: %s", task.String())
-			if err := processPendingTask(task); err != nil {
-				task.Error = err
-				if errors.Is(err, context.Canceled) {
-					task.Status = types.Canceled
-				} else {
-					common.Log.Errorf("Failed to do task: %s", err)
-					task.Status = types.Failed
+		qtask, err := qe.Get()
+		if err != nil {
+			logger.Error("Failed to get task from queue:", err)
+			break // queue closed and empty
+		}
+		task := qtask.Data
+		logger.Infof("Processing task: %s", task.TaskID())
+		if err := ExecCommandString(qtask.Context(), execHooks.TaskBeforeStart); err != nil {
+			logger.Errorf("Failed to execute before start hook for task %s: %v", task.TaskID(), err)
+		}
+		if err := task.Execute(qtask.Context()); err != nil {
+			if errors.Is(err, context.Canceled) {
+				logger.Infof("Task %s was canceled", task.TaskID())
+				if err := ExecCommandString(ctx, execHooks.TaskCancel); err != nil {
+					logger.Errorf("Failed to execute cancel hook for task %s: %v", task.TaskID(), err)
 				}
 			} else {
-				task.Status = types.Succeeded
+				logger.Errorf("Failed to execute task %s: %v", task.TaskID(), err)
+				if err := ExecCommandString(ctx, execHooks.TaskFail); err != nil {
+					logger.Errorf("Failed to execute fail hook for task %s: %v", task.TaskID(), err)
+				}
 			}
-			queue.AddTask(task)
-		case types.Succeeded:
-			common.Log.Infof("Task succeeded: %s", task.String())
-			extCtx, ok := task.Ctx.(*ext.Context)
-			if !ok {
-				common.Log.Errorf("Context is not *ext.Context: %T", task.Ctx)
-			} else if task.ReplyMessageID != 0 {
-				extCtx.EditMessage(task.ReplyChatID, &tg.MessagesEditMessageRequest{
-					Message: fmt.Sprintf("文件保存成功\n [%s]: %s", task.StorageName, task.StoragePath),
-					ID:      task.ReplyMessageID,
-				})
+		} else {
+			logger.Infof("Task %s completed successfully", task.TaskID())
+			if err := ExecCommandString(ctx, execHooks.TaskSuccess); err != nil {
+				logger.Errorf("Failed to execute success hook for task %s: %v", task.TaskID(), err)
 			}
-		case types.Failed:
-			common.Log.Errorf("Task failed: %s", task.String())
-			extCtx, ok := task.Ctx.(*ext.Context)
-			if !ok {
-				common.Log.Errorf("Context is not *ext.Context: %T", task.Ctx)
-			} else if task.ReplyMessageID != 0 {
-				extCtx.EditMessage(task.ReplyChatID, &tg.MessagesEditMessageRequest{
-					Message: "文件保存失败\n" + task.Error.Error(),
-					ID:      task.ReplyMessageID,
-				})
-			}
-		case types.Canceled:
-			common.Log.Infof("Task canceled: %s", task.String())
-			extCtx, ok := task.Ctx.(*ext.Context)
-			if !ok {
-				common.Log.Errorf("Context is not *ext.Context: %T", task.Ctx)
-			} else if task.ReplyMessageID != 0 {
-				extCtx.EditMessage(task.ReplyChatID, &tg.MessagesEditMessageRequest{
-					Message: "任务已取消",
-					ID:      task.ReplyMessageID,
-				})
-			}
-		default:
-			common.Log.Errorf("Unknown task status: %s", task.Status)
 		}
+		qe.Done(qtask.ID)
 		<-semaphore
-		common.Log.Debugf("Task done: %s; status: %s", task.String(), task.Status)
-		queue.DoneTask(task)
 	}
 }
 
-func Run() {
-	common.Log.Info("Start processing tasks...")
+func Run(ctx context.Context) {
+	log.FromContext(ctx).Info("Start processing tasks...")
 	semaphore := make(chan struct{}, config.Cfg.Workers)
-	for i := 0; i < config.Cfg.Workers; i++ {
-		go worker(queue.Queue, semaphore)
+	if queueInstance == nil {
+		queueInstance = queue.NewTaskQueue[Exectable]()
+	}
+	for range config.Cfg.Workers {
+		go worker(ctx, queueInstance, semaphore)
 	}
 
+}
+
+func AddTask(ctx context.Context, task Exectable) error {
+	return queueInstance.Add(queue.NewTask(ctx, task.TaskID(), task))
+}
+
+func CancelTask(ctx context.Context, id string) error {
+	err := queueInstance.CancelTask(id)
+	return err
+}
+
+func GetLength(ctx context.Context) int {
+	if queueInstance == nil {
+		return 0
+	}
+	return queueInstance.ActiveLength()
 }
