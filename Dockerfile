@@ -5,8 +5,11 @@ ARG GitCommit="Unknown"
 ARG BuildTime="Unknown"
 
 WORKDIR /app
-COPY go.* ./
-RUN go mod download
+
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+
 COPY . .
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
