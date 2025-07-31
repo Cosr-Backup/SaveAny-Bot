@@ -20,12 +20,24 @@
 - 流式传输
 - 多用户
 - 基于存储规则的自动整理
+- **Redis 6.0+ ACL 用户支持** - 支持云服务分布式缓存 🆕
 - 支持多种存储端:
   - Alist
   - Minio (S3 兼容)
   - WebDAV
   - Telegram (重传回指定聊天)
   - 本地磁盘
+
+### 🚀 新功能: Redis ACL 缓存支持 / New Feature: Redis ACL Cache Support
+
+- ✅ **Redis 6.0+ ACL 用户认证** / Redis 6.0+ ACL User Authentication
+- ✅ **云服务兼容** / Cloud Service Compatibility (AWS ElastiCache, Azure Cache, Google Cloud Memorystore)
+- ✅ **双缓存策略** / Dual Cache Strategy (Redis + Ristretto 内存缓存)
+- ✅ **环境变量配置** / Environment Variable Configuration
+- ✅ **自动降级机制** / Automatic Fallback Mechanism
+
+详细配置请参考：[Redis ACL 配置指南](REDIS_ACL_GUIDE.md)
+For detailed configuration, see: [Redis ACL Configuration Guide](REDIS_ACL_GUIDE.md)
 
 ## Sponsors
 
