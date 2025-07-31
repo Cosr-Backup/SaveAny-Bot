@@ -1,0 +1,67 @@
+# Docker Compose with Redis Support
+# Redis ACL 用户支持的 Docker Compose 配置示例
+version: '3.8'
+
+services:
+  saveany-bot:
+    image: ghcr.io/krau/saveany-bot:latest
+    container_name: saveany-bot
+    restart: unless-stopped
+    volumes:
+      - ./config.toml:/app/config.toml:ro
+      - ./data:/app/data
+      - ./downloads:/app/downloads
+    environment:
+      # Redis 配置 (可选，覆盖 config.toml 设置) / Redis configuration (optional, overrides config.toml settings)
+      - REDIS_ENABLE=true
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=your-redis-password
+      - REDIS_USER=saveany-app  # Redis 6.0+ ACL 用户 / Redis 6.0+ ACL user
+      - REDIS_DB=0
+    depends_on:
+      - redis
+    networks:
+      - saveany-network
+
+  # Redis 6.0+ 服务 (支持 ACL) / Redis 6.0+ service (with ACL support)
+  redis:
+    image: redis:7-alpine
+    container_name: saveany-redis
+    restart: unless-stopped
+    command: >
+      redis-server 
+      --requirepass your-redis-password
+      --appendonly yes
+      --appendfsync everysec
+    volumes:
+      - redis-data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+    ports:
+      - "6379:6379"
+    networks:
+      - saveany-network
+
+  # Redis ACL 配置示例 (可选) / Redis ACL configuration example (optional)
+  redis-acl-setup:
+    image: redis:7-alpine
+    container_name: saveany-redis-acl-setup
+    depends_on:
+      - redis
+    networks:
+      - saveany-network
+    command: >
+      sh -c "
+        sleep 5 &&
+        redis-cli -h redis -a your-redis-password --eval /usr/local/bin/setup-acl.lua
+      "
+    volumes:
+      - ./setup-acl.lua:/usr/local/bin/setup-acl.lua:ro
+    restart: "no"
+
+volumes:
+  redis-data:
+
+networks:
+  saveany-network:
+    driver: bridge

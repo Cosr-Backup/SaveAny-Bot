@@ -1,9 +1,49 @@
 # 创建文件时，若需要保留中文注释，请务必确保本文件编码为 UTF-8 ，否则会无法读取。
+# When creating this file, ensure UTF-8 encoding to preserve Chinese comments.
 # 更详细的配置请在 https://sabot.unv.app/deployment/configuration 查看
-workers = 4    # 同时下载文件数
-retry = 3      # 下载失败重试次数
-threads = 4    # 单个任务下载使用的最大线程数
-stream = false # 使用流式传输模式, 建议仅在硬盘空间十分有限时使用.
+# For detailed configuration, visit: https://sabot.unv.app/deployment/configuration
+
+workers = 4    # 同时下载文件数 / Concurrent download workers
+retry = 3      # 下载失败重试次数 / Download retry count on failure
+threads = 4    # 单个任务下载使用的最大线程数 / Max threads per download task
+stream = false # 使用流式传输模式, 建议仅在硬盘空间十分有限时使用 / Enable streaming mode (use only when disk space is very limited)
+
+# 缓存配置 / Cache Configuration
+[cache]
+# Ristretto 内存缓存设置 (Redis 禁用时使用) / Ristretto in-memory cache settings (used when Redis is disabled)
+ttl = 86400          # 缓存过期时间 (秒) / Cache TTL in seconds
+num_counters = 100000 # 缓存计数器数量 / Number of cache counters
+max_cost = 1000000   # 最大缓存成本 / Maximum cache cost
+
+  # Redis 分布式缓存配置，支持 Redis 6.0+ ACL 用户认证 / Redis distributed cache with Redis 6.0+ ACL user support
+  [cache.redis]
+  enable = false              # 启用 Redis 缓存 (false = 使用 Ristretto 内存缓存) / Enable Redis cache (false = use Ristretto in-memory cache)
+  
+  # 连接设置 / Connection Settings
+  host = "localhost"          # Redis 服务器地址 / Redis server host
+  port = 6379                 # Redis 服务器端口 / Redis server port
+  password = ""               # Redis 密码 / Redis password
+  redis_user = ""             # Redis 6.0+ ACL 用户名，支持云服务认证 / Redis 6.0+ ACL username for cloud services
+  db = 0                      # Redis 数据库编号 (0-15) / Redis database number (0-15)
+  
+  # 连接池设置 / Connection Pool Settings
+  max_retries = 3             # 最大重试次数 / Maximum retry attempts
+  min_idle_conns = 5          # 最小空闲连接数 / Minimum idle connections
+  max_idle_conns = 10         # 最大空闲连接数 / Maximum idle connections
+  max_active_conns = 100      # 最大活跃连接数 / Maximum active connections
+  
+  # 超时设置 (秒) / Timeout Settings (seconds)
+  connect_timeout = 10        # 连接超时 / Connection timeout
+  read_timeout = 5            # 读取超时 / Read timeout
+  write_timeout = 5           # 写入超时 / Write timeout
+  
+  # Redis 6.0+ ACL 用户场景示例 / Redis 6.0+ ACL User Examples:
+  # 云服务 / Cloud Services:
+  # - AWS ElastiCache: redis_user = "your-acl-username"
+  # - Azure Cache for Redis: redis_user = "your-acl-username"  
+  # - Google Cloud Memorystore: redis_user = "your-acl-username"
+  # 自建 Redis 6.0+: redis_user = "app-user"
+  # Self-hosted Redis 6.0+: redis_user = "app-user"
 
 [telegram]
 # Bot Token

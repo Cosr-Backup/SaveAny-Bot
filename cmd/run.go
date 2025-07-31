@@ -63,6 +63,11 @@ func initAll(ctx context.Context) {
 }
 
 func cleanCache() {
+	// 关闭缓存连接 / Close cache connections
+	if err := cache.Close(); err != nil {
+		log.Warnf("Failed to close cache connections: %v", err)
+	}
+
 	if config.Cfg.NoCleanCache {
 		return
 	}

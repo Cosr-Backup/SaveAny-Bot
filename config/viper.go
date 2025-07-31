@@ -59,10 +59,25 @@ func Init(ctx context.Context) error {
 		"retry":   3,
 		"threads": 4,
 
-		// 缓存配置
+		// 缓存配置 - Ristretto (内存缓存)
 		"cache.ttl":          86400,
 		"cache.num_counters": 1e5,
 		"cache.max_cost":     1e6,
+		
+		// 缓存配置 - Redis (分布式缓存，支持 ACL 用户)
+		"cache.redis.enable":          false,
+		"cache.redis.host":            "localhost",
+		"cache.redis.port":            6379,
+		"cache.redis.password":        "",
+		"cache.redis.redis_user":      "",
+		"cache.redis.db":              0,
+		"cache.redis.max_retries":     3,
+		"cache.redis.min_idle_conns":  5,
+		"cache.redis.max_idle_conns":  10,
+		"cache.redis.max_active_conns": 100,
+		"cache.redis.connect_timeout": 10,
+		"cache.redis.read_timeout":    5,
+		"cache.redis.write_timeout":   5,
 
 		// Telegram
 		"telegram.app_id":          1025907,
