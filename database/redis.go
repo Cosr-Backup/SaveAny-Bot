@@ -13,9 +13,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// Redis client instance
-var rdb *redis.Client
-
 // Redis key prefixes for different data types
 const (
 	userKeyPrefix       = "users:"        // users:{chatId}
@@ -94,7 +91,7 @@ func initRedis(ctx context.Context) error {
 }
 
 // generateID generates a new auto-increment ID for the given entity type
-func generateID(ctx context.Context, entityType string) (uint, error) {
+func generateID(ctx context.Context, entityType string, rdb *redis.Client) (uint, error) {
 	counterKey := counterKeyPrefix + entityType
 	id, err := rdb.Incr(ctx, counterKey).Result()
 	if err != nil {
@@ -229,7 +226,7 @@ func convertRedisRuleToRule(redisRule *RedisRule) *Rule {
 // Redis implementations of user operations
 
 // redisCreateUser creates a new user in Redis
-func redisCreateUser(ctx context.Context, chatID int64) error {
+func redisCreateUser(ctx context.Context, chatID int64, rdb *redis.Client) error {
 	// Check if user already exists
 	userKey := userKeyPrefix + strconv.FormatInt(chatID, 10)
 	exists, err := rdb.Exists(ctx, userKey).Result()
@@ -241,7 +238,7 @@ func redisCreateUser(ctx context.Context, chatID int64) error {
 	}
 
 	// Generate new ID
-	id, err := generateID(ctx, "user")
+	id, err := generateID(ctx, "user", rdb)
 	if err != nil {
 		return err
 	}
@@ -271,7 +268,7 @@ func redisCreateUser(ctx context.Context, chatID int64) error {
 }
 
 // redisGetAllUsers retrieves all users from Redis
-func redisGetAllUsers(ctx context.Context) ([]User, error) {
+func redisGetAllUsers(ctx context.Context, rdb *redis.Client) ([]User, error) {
 	// Get all user keys
 	userKeys, err := rdb.Keys(ctx, userKeyPrefix+"*").Result()
 	if err != nil {
@@ -308,7 +305,7 @@ func redisGetAllUsers(ctx context.Context) ([]User, error) {
 }
 
 // redisGetUserByChatID retrieves a user by chat ID from Redis
-func redisGetUserByChatID(ctx context.Context, chatID int64) (*User, error) {
+func redisGetUserByChatID(ctx context.Context, chatID int64, rdb *redis.Client) (*User, error) {
 	userKey := userKeyPrefix + strconv.FormatInt(chatID, 10)
 	
 	userData, err := rdb.Get(ctx, userKey).Result()
@@ -338,7 +335,7 @@ func redisGetUserByChatID(ctx context.Context, chatID int64) (*User, error) {
 }
 
 // redisUpdateUser updates a user in Redis
-func redisUpdateUser(ctx context.Context, user *User) error {
+func redisUpdateUser(ctx context.Context, user *User, rdb *redis.Client) error {
 	userKey := userKeyPrefix + strconv.FormatInt(user.ChatID, 10)
 	
 	// Check if user exists
@@ -370,7 +367,7 @@ func redisUpdateUser(ctx context.Context, user *User) error {
 }
 
 // redisDeleteUser deletes a user and associated data from Redis
-func redisDeleteUser(ctx context.Context, user *User) error {
+func redisDeleteUser(ctx context.Context, user *User, rdb *redis.Client) error {
 	userKey := userKeyPrefix + strconv.FormatInt(user.ChatID, 10)
 	
 	// Delete user data
@@ -406,7 +403,7 @@ func redisDeleteUser(ctx context.Context, user *User) error {
 
 // Redis implementations of dir operations
 
-func redisGetUserDirs(ctx context.Context, userID uint) ([]Dir, error) {
+func redisGetUserDirs(ctx context.Context, userID uint, rdb *redis.Client) ([]Dir, error) {
 	userDirsKey := userDirsKeyPrefix + strconv.Itoa(int(userID))
 	
 	dirIDs, err := rdb.SMembers(ctx, userDirsKey).Result()
@@ -436,7 +433,7 @@ func redisGetUserDirs(ctx context.Context, userID uint) ([]Dir, error) {
 
 // Redis implementations of rule operations
 
-func redisGetRulesByUserID(ctx context.Context, userID uint) ([]Rule, error) {
+func redisGetRulesByUserID(ctx context.Context, userID uint, rdb *redis.Client) ([]Rule, error) {
 	userRulesKey := userRulesKeyPrefix + strconv.Itoa(int(userID))
 	
 	ruleIDs, err := rdb.SMembers(ctx, userRulesKey).Result()
@@ -465,9 +462,9 @@ func redisGetRulesByUserID(ctx context.Context, userID uint) ([]Rule, error) {
 }
 
 // redisCreateDirForUser creates a directory for a user in Redis
-func redisCreateDirForUser(ctx context.Context, userID uint, storageName, path string) error {
+func redisCreateDirForUser(ctx context.Context, userID uint, storageName, path string, rdb *redis.Client) error {
 	// Generate new ID
-	id, err := generateID(ctx, "dir")
+	id, err := generateID(ctx, "dir", rdb)
 	if err != nil {
 		return err
 	}
@@ -507,7 +504,7 @@ func redisCreateDirForUser(ctx context.Context, userID uint, storageName, path s
 }
 
 // redisGetDirByID retrieves a directory by ID from Redis
-func redisGetDirByID(ctx context.Context, userID, id uint) (*Dir, error) {
+func redisGetDirByID(ctx context.Context, userID, id uint, rdb *redis.Client) (*Dir, error) {
 	dirKey := dirKeyPrefix + strconv.Itoa(int(userID)) + ":" + strconv.Itoa(int(id))
 	
 	dirData, err := rdb.Get(ctx, dirKey).Result()
@@ -527,17 +524,17 @@ func redisGetDirByID(ctx context.Context, userID, id uint) (*Dir, error) {
 }
 
 // redisGetUserDirsByChatID retrieves directories for a user by chat ID from Redis
-func redisGetUserDirsByChatID(ctx context.Context, chatID int64) ([]Dir, error) {
-	user, err := redisGetUserByChatID(ctx, chatID)
+func redisGetUserDirsByChatID(ctx context.Context, chatID int64, rdb *redis.Client) ([]Dir, error) {
+	user, err := redisGetUserByChatID(ctx, chatID, rdb)
 	if err != nil {
 		return nil, err
 	}
-	return redisGetUserDirs(ctx, user.ID)
+	return redisGetUserDirs(ctx, user.ID, rdb)
 }
 
 // redisGetDirsByUserIDAndStorageName retrieves directories by user ID and storage name from Redis
-func redisGetDirsByUserIDAndStorageName(ctx context.Context, userID uint, storageName string) ([]Dir, error) {
-	dirs, err := redisGetUserDirs(ctx, userID)
+func redisGetDirsByUserIDAndStorageName(ctx context.Context, userID uint, storageName string, rdb *redis.Client) ([]Dir, error) {
+	dirs, err := redisGetUserDirs(ctx, userID, rdb)
 	if err != nil {
 		return nil, err
 	}
@@ -554,18 +551,18 @@ func redisGetDirsByUserIDAndStorageName(ctx context.Context, userID uint, storag
 }
 
 // redisGetDirsByUserChatIDAndStorageName retrieves directories by user chat ID and storage name from Redis
-func redisGetDirsByUserChatIDAndStorageName(ctx context.Context, chatID int64, storageName string) ([]Dir, error) {
-	user, err := redisGetUserByChatID(ctx, chatID)
+func redisGetDirsByUserChatIDAndStorageName(ctx context.Context, chatID int64, storageName string, rdb *redis.Client) ([]Dir, error) {
+	user, err := redisGetUserByChatID(ctx, chatID, rdb)
 	if err != nil {
 		return nil, err
 	}
-	return redisGetDirsByUserIDAndStorageName(ctx, user.ID, storageName)
+	return redisGetDirsByUserIDAndStorageName(ctx, user.ID, storageName, rdb)
 }
 
 // redisDeleteDirForUser deletes a directory for a user from Redis
-func redisDeleteDirForUser(ctx context.Context, userID uint, storageName, path string) error {
+func redisDeleteDirForUser(ctx context.Context, userID uint, storageName, path string, rdb *redis.Client) error {
 	// Find the dir by userID, storageName, and path
-	dirs, err := redisGetUserDirs(ctx, userID)
+	dirs, err := redisGetUserDirs(ctx, userID, rdb)
 	if err != nil {
 		return err
 	}
@@ -580,7 +577,7 @@ func redisDeleteDirForUser(ctx context.Context, userID uint, storageName, path s
 }
 
 // redisDeleteDirByID deletes a directory by ID from Redis
-func redisDeleteDirByID(ctx context.Context, id uint) error {
+func redisDeleteDirByID(ctx context.Context, id uint, rdb *redis.Client) error {
 	// Find the dir to get userID
 	userDirsKeys, err := rdb.Keys(ctx, userDirsKeyPrefix+"*").Result()
 	if err != nil {
@@ -628,12 +625,12 @@ func redisDeleteDirByID(ctx context.Context, id uint) error {
 }
 
 // redisCreateRule creates a rule in Redis
-func redisCreateRule(ctx context.Context, rule *Rule) error {
+func redisCreateRule(ctx context.Context, rule *Rule, rdb *redis.Client) error {
 	// Generate new ID if not set
 	var id uint
 	var err error
 	if rule.ID == 0 {
-		id, err = generateID(ctx, "rule")
+		id, err = generateID(ctx, "rule", rdb)
 		if err != nil {
 			return err
 		}
@@ -678,7 +675,7 @@ func redisCreateRule(ctx context.Context, rule *Rule) error {
 }
 
 // redisDeleteRule deletes a rule by ID from Redis
-func redisDeleteRule(ctx context.Context, ruleID uint) error {
+func redisDeleteRule(ctx context.Context, ruleID uint, rdb *redis.Client) error {
 	// Find the rule to get userID
 	userRulesKeys, err := rdb.Keys(ctx, userRulesKeyPrefix+"*").Result()
 	if err != nil {
@@ -726,21 +723,21 @@ func redisDeleteRule(ctx context.Context, ruleID uint) error {
 }
 
 // redisUpdateUserApplyRule updates the apply_rule field for a user in Redis
-func redisUpdateUserApplyRule(ctx context.Context, chatID int64, applyRule bool) error {
-	user, err := redisGetUserByChatID(ctx, chatID)
+func redisUpdateUserApplyRule(ctx context.Context, chatID int64, applyRule bool, rdb *redis.Client) error {
+	user, err := redisGetUserByChatID(ctx, chatID, rdb)
 	if err != nil {
 		return err
 	}
 
 	user.ApplyRule = applyRule
-	return redisUpdateUser(ctx, user)
+	return redisUpdateUser(ctx, user, rdb)
 }
 
 // redisGetRulesByUserChatID retrieves rules for a user by chat ID from Redis
-func redisGetRulesByUserChatID(ctx context.Context, chatID int64) ([]Rule, error) {
-	user, err := redisGetUserByChatID(ctx, chatID)
+func redisGetRulesByUserChatID(ctx context.Context, chatID int64, rdb *redis.Client) ([]Rule, error) {
+	user, err := redisGetUserByChatID(ctx, chatID, rdb)
 	if err != nil {
 		return nil, err
 	}
-	return redisGetRulesByUserID(ctx, user.ID)
+	return redisGetRulesByUserID(ctx, user.ID, rdb)
 }

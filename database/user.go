@@ -2,69 +2,27 @@ package database
 
 import "context"
 
-// CreateUser creates a new user in the database (SQLite or Redis)
+// CreateUser creates a new user in the database
 func CreateUser(ctx context.Context, chatID int64) error {
-	if useRedis {
-		return redisCreateUser(ctx, chatID)
-	}
-	
-	// SQLite implementation (original)
-	if _, err := GetUserByChatID(ctx, chatID); err == nil {
-		return nil
-	}
-	return db.Create(&User{ChatID: chatID}).Error
+	return GetDatabase().CreateUser(ctx, chatID)
 }
 
-// GetAllUsers retrieves all users from the database (SQLite or Redis)
+// GetAllUsers retrieves all users from the database
 func GetAllUsers(ctx context.Context) ([]User, error) {
-	if useRedis {
-		return redisGetAllUsers(ctx)
-	}
-	
-	// SQLite implementation (original)
-	var users []User
-	err := db.Preload("Dirs").
-		WithContext(ctx).
-		Preload("Rules").
-		Find(&users).Error
-	return users, err
+	return GetDatabase().GetAllUsers(ctx)
 }
 
-// GetUserByChatID retrieves a user by chat ID from the database (SQLite or Redis)
+// GetUserByChatID retrieves a user by chat ID from the database
 func GetUserByChatID(ctx context.Context, chatID int64) (*User, error) {
-	if useRedis {
-		return redisGetUserByChatID(ctx, chatID)
-	}
-	
-	// SQLite implementation (original)
-	var user User
-	err := db.
-		Preload("Dirs").
-		WithContext(ctx).
-		Preload("Rules").
-		Where("chat_id = ?", chatID).First(&user).Error
-	return &user, err
+	return GetDatabase().GetUserByChatID(ctx, chatID)
 }
 
-// UpdateUser updates a user in the database (SQLite or Redis)
+// UpdateUser updates a user in the database
 func UpdateUser(ctx context.Context, user *User) error {
-	if useRedis {
-		return redisUpdateUser(ctx, user)
-	}
-	
-	// SQLite implementation (original)
-	if _, err := GetUserByChatID(ctx, user.ChatID); err != nil {
-		return err
-	}
-	return db.WithContext(ctx).Save(user).Error
+	return GetDatabase().UpdateUser(ctx, user)
 }
 
-// DeleteUser deletes a user from the database (SQLite or Redis)
+// DeleteUser deletes a user from the database
 func DeleteUser(ctx context.Context, user *User) error {
-	if useRedis {
-		return redisDeleteUser(ctx, user)
-	}
-	
-	// SQLite implementation (original)
-	return db.WithContext(ctx).Unscoped().Select("Dirs", "Rules").Delete(user).Error
+	return GetDatabase().DeleteUser(ctx, user)
 }
